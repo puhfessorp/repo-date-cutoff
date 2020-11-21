@@ -5,8 +5,6 @@ from RepoDateCutoff import RepoDateCutoff
 
 
 import argparse
-import datetime
-from dateutil.tz import tzlocal
 
 
 def main():
@@ -22,7 +20,10 @@ def main():
 
 def get_args():
 	
-	parser = argparse.ArgumentParser(prog="Show dates of last commits in repos")
+	parser = argparse.ArgumentParser(
+		prog="Repo cutoff date checker, by Mike Peralta",
+		description="Checks all repos inside a source directory against a cutoff date, and prints results in a tidy table."
+	)
 	
 	parser.add_argument(
 		"--source", "--source-path", "--dir", "--repos",
