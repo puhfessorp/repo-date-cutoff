@@ -1,7 +1,9 @@
 
 # Check Repos Against Cutoff Date
 
-Simple utility that checks git repos against a cutoff date:
+Simple utility that checks git repos against a cutoff date, by Mike Peralta.
+
+This progam does the following:
 
 1. Takes a cutoff date via CLI argument
 2. Takes a parent directory to scan via CLI argument
@@ -9,24 +11,39 @@ Simple utility that checks git repos against a cutoff date:
 4. For each repo found:
     1. Examines the most recent commit in the repo (currently staged branch)
     2. Checks the commit's date against the cutoff date
-    3. Emits an "OK" if the commit happened before the cutoff date; Emits a "WARN" otherwise
+    3. Emits a message regarding the previous comparison, in a tidy table
 
 This is only a quick report. You must manually checkout older commits if you wish to enforce a cutoff date.
 
+## Requirements
+
+* python3
+* pipenv
+
 ## Setup
 
-CD to the repo's directory, then run the following command to setup a pipenv environment:
+CD to the repo's directory, then run the following command to setup a pipenv environment that satisfies all python-related dependencies:
 
-```bash
-pipenv install
+```shell script
+$ cd /path/to/repo
+$ pipenv install
 ```
 
 ## Invocation
 
-Run the program by navigating to the repo's directory, then executing the following command:
+Run directly by navigating to the repo's directory, then executing the following command:
 
-```bash
-pipenv run python show-repo-dates.py
+```shell script
+$ cd /path/to/repo
+$ pipenv run python main.py --help
+```
+
+Alternatively, run in a pipenv shell like so:
+
+```shell script
+$ cd /path/to/repo
+$ pipenv shell
+$ ./main.py --help
 ```
 
 ### Arguments
@@ -48,12 +65,15 @@ See all options with ***--help***
 ### Invocation Examples
 
 *See help / available options*
-```bash
-pipenv run python ./check-repos-against-date.py --help
+```shell script
+$ cd /path/to/repo
+$ pipenv run python ./main.py --help
 ```
 
-```bash
-pipenv run python ./check-repos-against-date.py --source /parent/path/to/the/submitted/repos --cutoff "1997-08-29 02:14:00"
+*Check a directory containing repos*
+```shell script
+$ cd /path/to/repo
+$ pipenv run python ./main.py --source /parent/path/to/the/submitted/repos --cutoff "1997-08-29 02:14:00"
 ```
 
 
