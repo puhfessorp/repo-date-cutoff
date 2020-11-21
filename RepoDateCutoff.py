@@ -6,6 +6,7 @@ from git import Repo
 
 
 import datetime
+import dateutil
 from dateutil import parser as date_parser
 from dateutil.tz import tzlocal
 import multiprocessing
@@ -29,6 +30,8 @@ class RepoDateCutoff:
 		print(to_print)
 	
 	def check(self, repos_dir, cutoff_date_string):
+		
+		self.log("Repo date cutoff checker, by Mike Peralta")
 		
 		self.log("Begin checking repos against cutoff date")
 		self.log("> Repos directory: %s" % (repos_dir,))
@@ -152,7 +155,12 @@ class RepoDateCutoff:
 			this_machine_now,
 			datetime.time(0, tzinfo=tzlocal())
 		)
-		date_parsed = date_parser.parse(date_string, default=default_datetime)
+		
+		try:
+			date_parsed = date_parser.parse(date_string, default=default_datetime)
+		except ValueError as e:
+			self.log("Failed to parse date: %s !!!" % (date_string,))
+			raise e
 		
 		self.log("Date is actually: %s" % (date_parsed,))
 		
