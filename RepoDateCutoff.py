@@ -6,30 +6,35 @@ from git import Repo
 
 
 import datetime
-import dateutil
 from dateutil import parser as date_parser
 from dateutil.tz import tzlocal
 import multiprocessing
 import os
 import tabulate
 import threading
-# import time
 
 
 class RepoDateCutoff:
 	
-	def __init__(self):
+	def __init__(self, use_multithreading=True):
 		
-		pass
+		self.__use_multithreading = use_multithreading
+		
+		# noinspection PyTypeChecker
+		self.__valid_repos: list = None
 	
 	def log(self, s):
 		
 		to_log = s
-		to_print = "[%s] %s" % (type(self).__name__, to_log)
+		
+		if to_log == "":
+			to_print = ""
+		else:
+			to_print = "[%s] %s" % (type(self).__name__, to_log)
 		
 		print(to_print)
 	
-	def check(self, repos_dir, cutoff_date_string=None):
+	def check(self, repos_dir, cutoff_date_string=None, do_first_commit=False):
 		
 		self.log("Repo date cutoff checker, by Mike Peralta")
 		
@@ -53,15 +58,16 @@ class RepoDateCutoff:
 			repo = RepoEntry(path=path, cutoff_date=cutoff_date)
 			repo_entries.append(repo)
 		
-		cpus_count = multiprocessing.cpu_count()
+		threads_count = self._get_thread_count_to_use()
 		repos_to_parse = repo_entries.copy()
 		threads = []
 		mutex = threading.RLock()
-		for i in range(cpus_count):
+		for i in range(threads_count):
 			t = threading.Thread(
 				target=self._repo_entries_check_thread,
 				kwargs={
 					"repo_entries": repos_to_parse,
+					"do_first_commit": do_first_commit,
 					"mutex": mutex
 				}
 			)
@@ -81,13 +87,25 @@ class RepoDateCutoff:
 				self.log(line)
 			if entry.is_valid_repo():
 				valid_repo_entries.append(entry)
+		self.__valid_repos = valid_repo_entries
 		
 		self.log("Found %s valid repo entries" % (len(valid_repo_entries)))
 		
-		self.log("Final report:\n%s" % (self._render_report(repo_entries=valid_repo_entries)))
+		self.log("")
+		self.log(self._render_current_state_report())
+		
+		self.log("")
+		self.log(self._render_recommended_checkouts())
+	
+	def _get_thread_count_to_use(self):
+		
+		if self.__use_multithreading:
+			return multiprocessing.cpu_count()
+	
+		return 1
 	
 	@staticmethod
-	def _repo_entries_check_thread(repo_entries: list, mutex: threading.RLock):
+	def _repo_entries_check_thread(repo_entries: list, do_first_commit, mutex: threading.RLock):
 		
 		while True:
 			
@@ -103,47 +121,69 @@ class RepoDateCutoff:
 			if repo is None:
 				break
 			
-			repo.consume()
+			repo.consume(do_first_commit=do_first_commit)
 			print(".", end="")
 	
-	@staticmethod
-	def _render_report(repo_entries):
-	
-		s = ""
-		data_ok = []
-		data_late = []
-		headers = ["Repo", "Author", "Status", "Delta", "Message"]
+	def _render_recommended_checkouts(self):
 		
-		for entry in repo_entries:
+		s = ""
+		data = []
+		
+		for repo in self.__valid_repos:
+			
+			repo: RepoEntry
+			
+			if repo.get_current_commit() == repo.get_recommended_commit():
+				continue
+			
+			row = [
+				repo.get_dir_name(),
+				repo.get_branch_commits_count(),
+				repo.get_excluded_commits_count(),
+				str(repo.get_recommended_commit())[0:8],
+				repo.get_recommended_commit_author(),
+				repo.get_recommended_commit_date(),
+				repo.get_recommended_commit_delta()
+			]
+			data.append(row)
+		
+		s += "Recommended checkouts:\n"
+		s += tabulate.tabulate(
+			headers=["Repo", "Commits (Total)", "Commits (Exclude)", "Commit", "Author", "Commit Date", "Delta"],
+			tabular_data=data,
+			tablefmt="grid"
+		)
+		
+		return s
+	
+	def _render_current_state_report(self):
+		
+		s = ""
+		data = []
+		headers = ["Repo", "Commits (Total)", "Commits (Exclude)", "Commit", "Author", "Delta"]
+		
+		for entry in self.__valid_repos:
+			
+			entry: RepoEntry
 			
 			row = [
 				entry.get_dir_name(),
-				entry.get_author(),
-				entry.get_status(),
-				entry.get_delta(),
-				entry.get_message()
+				entry.get_branch_commits_count(),
+				entry.get_excluded_commits_count(),
+				str(entry.get_current_commit())[:8],
+				entry.get_current_commit_author(),
+				entry.get_current_commit_delta()
 			]
 			
-			if entry.is_late():
-				data_late.append(row)
-			
-			else:
-				data_ok.append(row)
+			data.append(row)
 		
-		s += "\n%s OK entries:\n" % (len(data_ok))
+		s += "\nCurrent state; %s valid repos:\n" % (len(self.__valid_repos))
 		s += tabulate.tabulate(
 			headers=headers,
-			tabular_data=data_ok,
+			tabular_data=data,
 			tablefmt="grid"
 		)
 		s += "\n"
-		
-		s += "\n%s late entries:\n" % (len(data_late))
-		s += tabulate.tabulate(
-			headers=headers,
-			tabular_data=data_late,
-			tablefmt="grid"
-		)
 		
 		return s
 	
@@ -177,14 +217,27 @@ class RepoEntry:
 		self.__path = os.path.abspath(path)
 		self.__dir_name = os.path.basename(self.__path)
 		
+		# noinspection PyTypeChecker
+		self.__repo: Repo = None
 		self.__cutoff_date = cutoff_date
 		
-		self.__author = None
-		self.__status = None
-		self.__message = None
-		self.__delta = None
+		# noinspection PyTypeChecker
+		self.__commits_count: int = None
 		self.__valid_repo = None
-		self.__late = None
+		
+		# noinspection PyTypeChecker
+		self.__first_commit: git.objects.commit.Commit = None
+		
+		# noinspection PyTypeChecker
+		self.__current_commit: git.objects.commit.Commit = None
+		self.__current_commit_author = None
+		self.__current_commit_delta = None
+		
+		# noinspection PyTypeChecker
+		self.__recommended_commit: git.objects.commit.Commit = None
+		self.__recommended_commit_author = None
+		self.__recommended_commit_delta = None
+		self.__excluded_commit_count = None
 		
 		# noinspection PyTypeChecker
 		self.__logs: list = None
@@ -207,7 +260,7 @@ class RepoEntry:
 		
 		self.__is_dirty = True
 	
-	def consume(self):
+	def consume(self, do_first_commit):
 		
 		if not self.__is_dirty:
 			return
@@ -217,37 +270,14 @@ class RepoEntry:
 			self.__logs = []
 			self.log("Begin consume")
 			
-			repo = Repo(self.__path)
+			self.__repo = Repo(self.__path)
 			
-			head = repo.head
-			master = head.reference
-			# print("Head is at:", master)
+			self.__current_commit = self.__repo.head.reference.commit
+			self.__current_commit_author = self.__current_commit.author
+			self.__current_commit_delta = self.__current_commit.committed_datetime - self.__cutoff_date
+			self.log("Current commit delta: %s" % (self.__current_commit_delta,))
 			
-			#
-			commit = master.commit
-			
-			self.__author = commit.author
-			self.__status = "OK"
-			self.__message = "Last commit within cutoff"
-			self.__late = False
-			self.__delta = 0
-			
-			self.log("Commit author: %s" % (self.__author,))
-			
-			if commit.committed_datetime > self.__cutoff_date:
-				
-				self.__delta = commit.committed_datetime - self.__cutoff_date
-				
-				self.__status = "LATE"
-				self.__message = "Last commit AFTER cutoff!"
-				self.__late = True
-				# self.log("Debug: %s vs. %s ==> %s" % (self.__cutoff_date, commit.committed_datetime, self.__delta))
-				
-				self.log("Last commit happened %s seconds after the cutoff date" % (self.__delta,))
-				
-			else:
-				
-				self.log("Last commit with cutoff")
+			self._determine_recommended_commit(do_first_commit=do_first_commit)
 			
 			self.__valid_repo = True
 		
@@ -260,6 +290,53 @@ class RepoEntry:
 		
 		self.__is_dirty = False
 	
+	def _determine_recommended_commit(self, do_first_commit):
+		
+		# Default to the recommended commit being the latest one on the active branch
+		commit = self.__repo.active_branch.commit
+		self.__author = commit.author
+		self.log("Commit author: %s" % (self.__author,))
+		
+		# Find the first commit, and count them all
+		self.__commits_count = 1
+		self.__first_commit = commit
+		for c in commit.iter_parents():
+			self.__first_commit = c
+			self.__commits_count += 1
+		
+		# Possibly just checkout the first commit
+		if do_first_commit is True:
+			
+			self.__recommended_commit = self.__first_commit
+			self.__excluded_commit_count = self.__commits_count - 1
+		
+		# If the latest commit is beyond the cutoff date, search backward for one that is within the cutoff
+		elif commit.committed_datetime > self.__cutoff_date:
+			
+			self.log("Searching for a previous commit within the cutoff date:")
+			self.__recommended_commit = self.__first_commit
+			self.__excluded_commit_count = 0
+			for c in commit.iter_parents():
+				self.__excluded_commit_count += 1
+				if c.committed_datetime <= self.__cutoff_date:
+					self.__recommended_commit = c
+					self.log("> Commit %s is within the cutoff, at: %s" % (c, c.committed_datetime))
+					break
+				else:
+					self.log("> Commit also isn't within cutoff date: %s" % (str(c),))
+			if self.__recommended_commit == commit:
+				self.log("> Failed to find a commit within the cutoff date!")
+		
+		else:
+			
+			self.__recommended_commit = commit
+			self.__excluded_commit_count = 0
+			
+			self.log("Last commit with cutoff")
+		
+		self.__recommended_commit_delta = self.__recommended_commit.committed_datetime - self.__cutoff_date
+		self.log("Recommended commit delta: %s" % (self.__recommended_commit_delta,))
+		
 	def get_dir_name(self):
 	
 		return self.__dir_name
@@ -267,23 +344,43 @@ class RepoEntry:
 	def is_valid_repo(self):
 		
 		return self.__valid_repo
-
-	def is_late(self):
-		
-		return self.__late
 	
-	def get_status(self):
+	def get_current_commit_delta(self):
 		
-		return self.__status
+		return self.__current_commit_delta
 	
-	def get_message(self):
+	def get_recommended_commit_delta(self):
 		
-		return self.__message
+		return self.__recommended_commit_delta
 	
-	def get_delta(self):
+	def get_current_commit_author(self):
 		
-		return self.__delta
-
-	def get_author(self):
+		return self.__current_commit_author
+	
+	def get_branch_commits_count(self):
 		
-		return self.__author
+		return self.__commits_count
+	
+	def get_included_commits_count(self):
+		
+		return self.get_branch_commits_count() - self.get_excluded_commits_count()
+	
+	def get_excluded_commits_count(self):
+		
+		return self.__excluded_commit_count
+	
+	def get_current_commit(self):
+		
+		return self.__current_commit
+	
+	def get_recommended_commit(self):
+		
+		return self.__recommended_commit
+	
+	def get_recommended_commit_author(self):
+		
+		return self.__recommended_commit.author
+	
+	def get_recommended_commit_date(self):
+		
+		return self.__recommended_commit.committed_datetime
