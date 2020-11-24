@@ -14,7 +14,8 @@ def main():
 	checker = RepoDateCutoff()
 
 	checker.check(
-		repos_dir=args.source, cutoff_date_string=args.cutoff_date
+		repos_dir=args.source,
+		cutoff_date_string=args.cutoff_date
 	)
 
 
@@ -31,10 +32,12 @@ def get_args():
 		default=".",
 		help="Directory containing repo directories."
 	)
+	
 	parser.add_argument(
 		"--cutoff", "--date", "--cutoff-date",
 		dest="cutoff_date",
-		required=True,
+		required=False,
+		default=None,
 		help="Cutoff date; Any commits made after this date will show a warning."
 	)
 	

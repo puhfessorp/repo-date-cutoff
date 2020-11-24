@@ -29,7 +29,7 @@ class RepoDateCutoff:
 		
 		print(to_print)
 	
-	def check(self, repos_dir, cutoff_date_string):
+	def check(self, repos_dir, cutoff_date_string=None):
 		
 		self.log("Repo date cutoff checker, by Mike Peralta")
 		
@@ -37,6 +37,9 @@ class RepoDateCutoff:
 		self.log("> Repos directory: %s" % (repos_dir,))
 		self.log("> Cutoff date string: %s" % (cutoff_date_string,))
 		
+		if cutoff_date_string is None:
+			cutoff_date_string = str(self.get_now())
+			self.log("> No cutoff date specified; Using now: %s" % (cutoff_date_string,))
 		cutoff_date = self.parse_date_string(date_string=cutoff_date_string)
 		self.log("> Cutoff date: %s" % (cutoff_date,))
 		
@@ -83,9 +86,8 @@ class RepoDateCutoff:
 		
 		self.log("Final report:\n%s" % (self._render_report(repo_entries=valid_repo_entries)))
 	
-	def _repo_entries_check_thread(self, repo_entries: list, mutex: threading.RLock):
-		
-		self.log("")
+	@staticmethod
+	def _repo_entries_check_thread(repo_entries: list, mutex: threading.RLock):
 		
 		while True:
 			
@@ -149,15 +151,9 @@ class RepoDateCutoff:
 		
 		self.log("Parsing date string: %s" % (date_string,))
 		
-		this_machine_now = datetime.datetime.now(tzlocal())
-		
-		default_datetime = datetime.datetime.combine(
-			this_machine_now,
-			datetime.time(0, tzinfo=tzlocal())
-		)
-		
 		try:
-			date_parsed = date_parser.parse(date_string, default=default_datetime)
+			now = self.get_now()
+			date_parsed = date_parser.parse(date_string, default=now)
 		except ValueError as e:
 			self.log("Failed to parse date: %s !!!" % (date_string,))
 			raise e
@@ -165,6 +161,13 @@ class RepoDateCutoff:
 		self.log("Date is actually: %s" % (date_parsed,))
 		
 		return date_parsed
+	
+	@staticmethod
+	def get_now():
+		
+		this_machine_now = datetime.datetime.now(tzlocal())
+		
+		return this_machine_now
 
 
 class RepoEntry:
