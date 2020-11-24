@@ -23,7 +23,7 @@ class RepoDateCutoff:
 		# noinspection PyTypeChecker
 		self.__valid_repos: list = None
 	
-	def log(self, s):
+	def log(self, s=""):
 		
 		to_log = s
 		
@@ -90,6 +90,9 @@ class RepoDateCutoff:
 		self.__valid_repos = valid_repo_entries
 		
 		self.log("Found %s valid repo entries" % (len(valid_repo_entries)))
+		
+		self.log()
+		self.log(self._render_current_commits_report())
 		
 		self.log("")
 		self.log(self._render_current_state_report())
@@ -221,6 +224,35 @@ class RepoDateCutoff:
 		]
 		
 		return row
+	
+	def _render_current_commits_report(self):
+		
+		s = ""
+		data = []
+		headers = ["Repo", "Commits", "Commit", "Date"]
+		
+		for entry in self.__valid_repos:
+			
+			entry: RepoEntry
+			
+			row = [
+				entry.get_dir_name(),
+				entry.get_branch_commits_count(),
+				str(entry.get_current_commit())[:8],
+				entry.get_current_commit_date()
+			]
+			
+			data.append(row)
+		
+		s += "\nCurrent state of commits:\n"
+		s += tabulate.tabulate(
+			headers=headers,
+			tabular_data=data,
+			tablefmt="grid"
+		)
+		s += "\n"
+		
+		return s
 	
 	def _render_current_state_report(self):
 		
