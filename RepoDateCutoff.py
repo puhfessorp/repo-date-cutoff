@@ -92,7 +92,10 @@ class RepoDateCutoff:
 		self.log("Found %s valid repo entries" % (len(valid_repo_entries)))
 		
 		self.log()
-		self.log(self._render_current_commits_report())
+		self.log(self._render_current_commits_report(minimal=True))
+		
+		self.log()
+		self.log(self._render_current_commits_report(minimal=False))
 		
 		self.log("")
 		self.log(self._render_current_state_report())
@@ -225,26 +228,34 @@ class RepoDateCutoff:
 		
 		return row
 	
-	def _render_current_commits_report(self):
+	def _render_current_commits_report(self, minimal=False):
 		
 		s = ""
 		data = []
-		headers = ["Repo", "Commits", "Commit", "Date"]
+		headers = (
+			["Repo", "Commit"] if minimal
+			else ["Repo", "Commits", "Commit", "Date"]
+		)
 		
 		for entry in self.__valid_repos:
 			
 			entry: RepoEntry
 			
-			row = [
-				entry.get_dir_name(),
-				entry.get_branch_commits_count(),
-				str(entry.get_current_commit())[:8],
-				entry.get_current_commit_date()
-			]
+			row = list()
+			
+			row.append(entry.get_dir_name())
+			
+			if not minimal:
+				row.append(entry.get_branch_commits_count())
+			
+			row.append(str(entry.get_current_commit())[:8])
+			
+			if not minimal:
+				row.append(entry.get_current_commit_date())
 			
 			data.append(row)
 		
-		s += "\nCurrent state of commits:\n"
+		s += "\nCurrent state of commits%s:\n" % (" (minimal)" if minimal else "")
 		s += tabulate.tabulate(
 			headers=headers,
 			tabular_data=data,
