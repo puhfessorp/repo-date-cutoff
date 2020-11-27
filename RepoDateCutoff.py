@@ -98,12 +98,14 @@ class RepoDateCutoff:
 		self.log()
 		self.log("Valid repo logs:")
 		for r in self.__valid_repos:
+			self.log()
 			for line in r.get_logs():
 				self.log(line)
 		
 		self.log()
 		self.log("Invalid repo logs:")
 		for r in self.__invalid_repos:
+			self.log()
 			for line in r.get_logs():
 				self.log(line)
 		
@@ -400,7 +402,7 @@ class RepoEntry:
 			self.__repo = Repo(self.__path)
 			self.log("Consumed repo: %s" % (self.__dir_name,))
 			
-			self.log("Available branches: %s" % (branch.name for branch in self.__repo.heads))
+			self.log("Available branches: %s" % (str(branch.name) for branch in self.__repo.heads))
 			
 			if self.__repo.head.is_detached:
 				self.__current_commit = self.__repo.head.commit
