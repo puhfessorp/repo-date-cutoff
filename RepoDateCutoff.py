@@ -22,6 +22,9 @@ class RepoDateCutoff:
 		
 		# noinspection PyTypeChecker
 		self.__valid_repos: list = None
+		
+		# noinspection PyTypeChecker
+		self.__invalid_repos: list = None
 	
 	def log(self, s=""):
 		
@@ -39,6 +42,9 @@ class RepoDateCutoff:
 		self.log("Repo date cutoff checker, by Mike Peralta")
 		
 		self.log("Begin checking repos against cutoff date")
+		
+		repos_dir = os.path.abspath(repos_dir)
+		
 		self.log("> Repos directory: %s" % (repos_dir,))
 		self.log("> Cutoff date string: %s" % (cutoff_date_string,))
 		
@@ -81,15 +87,30 @@ class RepoDateCutoff:
 		print()
 		self.log("All threads finished")
 		
-		valid_repo_entries = []
+		self.__valid_repos = []
+		self.__invalid_repos = []
 		for entry in repo_entries:
-			for line in entry.get_logs():
-				self.log(line)
 			if entry.is_valid_repo():
-				valid_repo_entries.append(entry)
-		self.__valid_repos = valid_repo_entries
+				self.__valid_repos.append(entry)
+			else:
+				self.__invalid_repos.append(entry)
 		
-		self.log("Found %s valid repo entries" % (len(valid_repo_entries)))
+		self.log("Found %s valid repo entries" % (len(self.__valid_repos)))
+		self.log("Found %s invalid repo entries" % (len(self.__invalid_repos)))
+		
+		self.log()
+		self.log("Valid repo logs:")
+		for r in self.__valid_repos:
+			self.log()
+			for line in r.get_logs():
+				self.log(line)
+		
+		self.log()
+		self.log("Invalid repo logs:")
+		for r in self.__invalid_repos:
+			self.log()
+			for line in r.get_logs():
+				self.log(line)
 		
 		self.log()
 		self.log(self._render_current_commits_report(minimal=True))
@@ -355,7 +376,9 @@ class RepoEntry:
 	
 	def log(self, s):
 		
-		to_log = "[%s][%s] %s" % (type(self).__name__, self.__dir_name, s)
+		to_log = ""
+		
+		to_log += "[%s][%s] %s" % (type(self).__name__, self.__dir_name, s)
 		
 		self.__logs.append(to_log)
 	
@@ -380,12 +403,22 @@ class RepoEntry:
 			self.log("Begin consume")
 			
 			self.__repo = Repo(self.__path)
+			self.log("Consumed repo: %s" % (self.__dir_name,))
+			
+			self.log("Available references:")
+			for h in self.__repo.heads:
+				self.log("> Reference: %s" % h.name)
 			
 			if self.__repo.head.is_detached:
 				self.__current_commit = self.__repo.head.commit
+				self.log("Head is detached; Commit: %s" % (str(self.__current_commit),))
 			else:
 				self.__current_commit = self.__repo.head.reference.commit
+				self.log("Head references commit: %s" % (str(self.__current_commit),))
+				
 			self.__current_commit_author = self.__current_commit.author
+			self.log("Commit author: %s" % (self.__current_commit_author,))
+			
 			self.__current_commit_delta = self.__current_commit.committed_datetime - self.__cutoff_date
 			self.log("Current commit delta: %s" % (self.__current_commit_delta,))
 			
@@ -399,10 +432,21 @@ class RepoEntry:
 		except git.exc.InvalidGitRepositoryError:
 			# This path was not a repo
 			self.__valid_repo = False
+			self.log("Not a valid repo: %s" % (self.__dir_name,))
+		
+		except AttributeError as e:
+			self.__valid_repo = False
+			self.log(
+				"AttributeError while trying to consume repository \"%s\": %s"
+				% (self.__dir_name, str(e))
+			)
 		
 		self.__is_dirty = False
 	
 	def _determine_recommended_commit(self, do_first_commit):
+		
+		#
+		self.log("Begin determining recommended commit")
 		
 		# Default to the recommended commit being the latest one on the active branch
 		latest_master_commit = self.__repo.heads.master.commit
@@ -420,6 +464,8 @@ class RepoEntry:
 		
 		# Possibly just checkout the first commit
 		if do_first_commit is True:
+			
+			self.log("Checking out first commit")
 			
 			self.__recommended_commit = self.__first_commit
 			self.__excluded_commit_count = self.__commits_count - 1
