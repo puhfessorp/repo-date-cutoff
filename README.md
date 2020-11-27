@@ -1,19 +1,27 @@
 
 # Check Repos Against Cutoff Date
 
-Simple utility that checks git repos against a cutoff date, by Mike Peralta.
+Simple utility that checks git repositories against a cutoff date, by Mike Peralta.
 
-This progam does the following:
+This program does the following:
 
 1. Takes a cutoff date via CLI argument
-2. Takes a parent directory to scan via CLI argument
-3. Scans every git repository under the parent directory
-4. For each repo found:
-    1. Examines the most recent commit in the repo (currently staged branch)
-    2. Checks the commit's date against the cutoff date
-    3. Emits a message regarding the previous comparison, in a tidy table
 
-This is only a quick report. You must manually checkout older commits if you wish to enforce a cutoff date.
+2. Takes a parent directory to scan via CLI argument
+
+3. Scans every git repository under the parent directory
+
+4. For each repo found:
+
+    1. Examines the most recent commit in the repo (currently staged branch)
+
+    2. Starting with the default branch, locates the most recent commit that happened before the cutoff date
+
+    3. Emits various summary tables of the current and recommended states
+
+5. Will adjust each repo one by one (interactive), or do them all automatically.
+
+By default, the program will use multiple threads to analyze the repositories, to help reduce lag caused by executing git commands under the hood.
 
 ## Requirements
 
@@ -58,6 +66,14 @@ Provide the parent folder that contains all submitted repo folders with: the ***
 
 Provide the cutoff date with the ***--cutoff*** argument
 
+#### --first-commit
+
+Instead of comparing against a cutoff date, just reset each repository to the very first commit of its default branch.
+
+#### --single-thread
+
+Only use 1 thread for all operations (helpful for debugging)
+
 #### --help
 
 See all options with ***--help***
@@ -70,10 +86,16 @@ $ cd /path/to/repo
 $ pipenv run python ./main.py --help
 ```
 
-*Check a directory containing repos*
+*Check a directory containing repositories*
 ```shell script
 $ cd /path/to/repo
 $ pipenv run python ./main.py --source /parent/path/to/the/submitted/repos --cutoff "1997-08-29 02:14:00"
+```
+
+*Set all repositories to the first commit of their default branch*
+```shell script
+$ cd /path/to/repo
+$ pipenv run python ./main.py --source /parent/path/to/the/submitted/repos --first-commit
 ```
 
 
