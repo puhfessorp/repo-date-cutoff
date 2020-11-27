@@ -42,6 +42,9 @@ class RepoDateCutoff:
 		self.log("Repo date cutoff checker, by Mike Peralta")
 		
 		self.log("Begin checking repos against cutoff date")
+		
+		repos_dir = os.path.abspath(repos_dir)
+		
 		self.log("> Repos directory: %s" % (repos_dir,))
 		self.log("> Cutoff date string: %s" % (cutoff_date_string,))
 		
@@ -402,7 +405,9 @@ class RepoEntry:
 			self.__repo = Repo(self.__path)
 			self.log("Consumed repo: %s" % (self.__dir_name,))
 			
-			self.log("Available branches: %s" % (str(branch.name) for branch in self.__repo.heads))
+			self.log("Available references:")
+			for h in self.__repo.heads:
+				self.log("> Reference: %s" % h.name)
 			
 			if self.__repo.head.is_detached:
 				self.__current_commit = self.__repo.head.commit
