@@ -165,7 +165,7 @@ class RepoDateCutoff:
 			print(".", end="")
 	
 	def _do_recommended_checkouts(self, force=False):
-	
+		
 		self.log("Performing recommended checkouts in %s mode" % ("auto" if force is True else "interactive"))
 		
 		headers = self.row = self._render_recommended_checkouts_headers()
@@ -451,6 +451,12 @@ class RepoEntry:
 			self.log(
 				"AttributeError while trying to consume repository \"%s\": %s"
 				% (self.__dir_name, str(e))
+			)
+		
+		except AssertionError as e:
+			self.__valid_repo = False
+			self.log(
+				"Assertion error while trying to consume repository: %s" % (str(e))
 			)
 		
 		self.__is_dirty = False
