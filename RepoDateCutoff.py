@@ -16,7 +16,13 @@ import threading
 
 class RepoDateCutoff:
 	
-	def __init__(self, use_multithreading=True):
+	CONST_DEFAULT_BRANCH_NAME = "master"
+	
+	def __init__(self, branch_name=None, use_multithreading=True):
+		
+		if branch_name is None:
+			branch_name = self.CONST_DEFAULT_BRANCH_NAME
+		self.__branch_name = branch_name
 		
 		self.__use_multithreading = use_multithreading
 		
@@ -37,7 +43,7 @@ class RepoDateCutoff:
 		
 		print(to_print)
 	
-	def check(self, repos_dir, cutoff_date_string=None, do_first_commit=False):
+	def check(self, repos_dir, branch_name=None, cutoff_date_string=None, do_first_commit=False):
 		
 		self.log("Repo date cutoff checker, by Mike Peralta")
 		
@@ -45,7 +51,11 @@ class RepoDateCutoff:
 		
 		repos_dir = os.path.abspath(repos_dir)
 		
+		if branch_name is not None:
+			self.__branch_name = branch_name
+		
 		self.log("> Repos directory: %s" % (repos_dir,))
+		self.log("> Using branch name: %s" % (self.__branch_name,))
 		self.log("> Cutoff date string: %s" % (cutoff_date_string,))
 		
 		if cutoff_date_string is None:
@@ -57,11 +67,12 @@ class RepoDateCutoff:
 		repos_dirs = [f for f in os.scandir(repos_dir)]
 		self.log("> Found %s potential repo directories" % (len(list(repos_dirs))))
 		
+		# Create RepoEntry() objects
 		self.log("Gathering repo dirs")
 		repo_entries = []
 		for item in repos_dirs:
 			path = os.path.join(repos_dir, item)
-			repo = RepoEntry(path=path, cutoff_date=cutoff_date)
+			repo = RepoEntry(path=path, branch_name=self.__branch_name, cutoff_date=cutoff_date)
 			repo_entries.append(repo)
 		
 		threads_count = self._get_thread_count_to_use()
@@ -154,7 +165,7 @@ class RepoDateCutoff:
 			print(".", end="")
 	
 	def _do_recommended_checkouts(self, force=False):
-	
+		
 		self.log("Performing recommended checkouts in %s mode" % ("auto" if force is True else "interactive"))
 		
 		headers = self.row = self._render_recommended_checkouts_headers()
@@ -342,9 +353,10 @@ class RepoDateCutoff:
 
 class RepoEntry:
 	
-	def __init__(self, path, cutoff_date):
+	def __init__(self, path, branch_name, cutoff_date):
 		
 		self.__path = os.path.abspath(path)
+		self.__branch_name = branch_name
 		self.__dir_name = os.path.basename(self.__path)
 		
 		# noinspection PyTypeChecker
@@ -441,6 +453,12 @@ class RepoEntry:
 				% (self.__dir_name, str(e))
 			)
 		
+		except AssertionError as e:
+			self.__valid_repo = False
+			self.log(
+				"Assertion error while trying to consume repository: %s" % (str(e))
+			)
+		
 		self.__is_dirty = False
 	
 	def _determine_recommended_commit(self, do_first_commit):
@@ -449,16 +467,19 @@ class RepoEntry:
 		self.log("Begin determining recommended commit")
 		
 		# Default to the recommended commit being the latest one on the active branch
-		latest_master_commit = self.__repo.heads.master.commit
-		latest_master_commit: git.objects.commit.Commit
+		# print("ATTR:", getattr(self.__repo.heads, self.__branch_name))
+		assert self.__branch_name in self.__repo.heads, "Want to use branch \"%s\", but it wasn't found" % self.__branch_name
+		# latest_branch_commit = self.__repo.heads.master.commit
+		latest_branch_commit = getattr(self.__repo.heads, self.__branch_name).commit
+		latest_branch_commit: git.objects.commit.Commit
 		
-		self.__author = latest_master_commit.author
+		self.__author = latest_branch_commit.author
 		self.log("Commit author: %s" % (self.__author,))
 		
 		# Find the first commit, and count them all
 		self.__commits_count = 1
-		self.__first_commit = latest_master_commit
-		for c in latest_master_commit.iter_parents():
+		self.__first_commit = latest_branch_commit
+		for c in latest_branch_commit.iter_parents():
 			self.__first_commit = c
 			self.__commits_count += 1
 		
@@ -471,12 +492,12 @@ class RepoEntry:
 			self.__excluded_commit_count = self.__commits_count - 1
 		
 		# If the latest commit is beyond the cutoff date, search backward for one that is within the cutoff
-		elif latest_master_commit.committed_datetime > self.__cutoff_date:
+		elif latest_branch_commit.committed_datetime > self.__cutoff_date:
 			
-			self.log("Searching for a previous commit within the cutoff date, starting with %s:" % (latest_master_commit,))
+			self.log("Searching for a previous commit within the cutoff date, starting with %s:" % (latest_branch_commit,))
 			self.__recommended_commit = self.__first_commit
 			self.__excluded_commit_count = 0
-			for c in latest_master_commit.iter_parents():
+			for c in latest_branch_commit.iter_parents():
 				self.log("Examining: %s" % (c,))
 				self.__excluded_commit_count += 1
 				if c.committed_datetime <= self.__cutoff_date:
@@ -485,12 +506,12 @@ class RepoEntry:
 					break
 				else:
 					self.log("> Commit also isn't within cutoff date: %s" % (str(c),))
-			if self.__recommended_commit == latest_master_commit:
+			if self.__recommended_commit == latest_branch_commit:
 				self.log("> Failed to find a commit within the cutoff date!")
 		
 		else:
 			
-			self.__recommended_commit = latest_master_commit
+			self.__recommended_commit = latest_branch_commit
 			self.__excluded_commit_count = 0
 			self.log("Looks like the latest master commit is within the cutoff")
 		

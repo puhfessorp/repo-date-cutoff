@@ -17,6 +17,7 @@ def main():
 	
 	checker.check(
 		repos_dir=args.source,
+		branch_name=args.branch_name,
 		cutoff_date_string=args.cutoff_date,
 		do_first_commit=args.do_first_commit
 	)
@@ -34,6 +35,14 @@ def get_args():
 		dest="source",
 		default=".",
 		help="Directory containing repo directories."
+	)
+	
+	parser.add_argument(
+		"--branch", "--branch-name",
+		dest="branch_name",
+		default=None,
+		required=False,
+		help="Specify a branch to use"
 	)
 	
 	parser.add_argument(
