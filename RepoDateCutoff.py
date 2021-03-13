@@ -521,6 +521,7 @@ class RepoEntry:
 	def do_recommended_checkout(self):
 		
 		self.__repo.head.reference = self.__recommended_commit
+		self.__repo.git.reset("--hard")
 	
 	def get_dir_name(self):
 	
