@@ -79,7 +79,7 @@ class RepoDateCutoff:
 		repos_to_parse = repo_entries.copy()
 		threads = []
 		mutex = threading.RLock()
-		for i in range(threads_count):
+		for _ in range(threads_count):
 			t = threading.Thread(
 				target=self._repo_entries_check_thread,
 				kwargs={
@@ -457,6 +457,12 @@ class RepoEntry:
 			self.__valid_repo = False
 			self.log(
 				"Assertion error while trying to consume repository: %s" % (str(e))
+			)
+		
+		except ValueError as e:
+			self.__valid_repo = False
+			self.log(
+				"Value error while trying to consume repository: %s" % (str(e))
 			)
 		
 		self.__is_dirty = False
